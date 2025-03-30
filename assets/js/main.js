@@ -58,6 +58,13 @@ const teams = [
   ];
   
 $(document).ready(function() {
+    const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+            polygon: true,
+            trash: true
+        }
+    });
     const $select = $('#team-select');
     // Append new options
     teams.forEach(team => {
@@ -114,6 +121,307 @@ $(document).ready(function() {
     
     // Add navigation controls
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    map.addControl(draw, 'top-right');
+    function selectFeaturesWithinPolygon(drawnPolygon) {
+        // Clear previous selection
+        selectedFeatures = [];
+        
+        // Get all features from the geojson source
+        const features = map.querySourceFeatures('geojson-source');
+        
+        // For each feature, check if it intersects with the drawn polygon
+        features.forEach(feature => {
+            try {
+                // Check for intersection using Turf.js
+                const intersection = turf.booleanIntersects(feature, drawnPolygon);
+                
+                if (intersection) {
+                    // Add to selected features
+                    selectedFeatures.push(feature);
+                }
+            } catch (error) {
+                console.error('Error checking intersection:', error, feature);
+            }
+        });
+        
+        // Update the selection styling
+        updateSelectionStyle();
+        
+        // Optional: Delete the drawn polygon after selection
+        // draw.deleteAll();
+        
+        // Show count of selected features
+        alert(`Selected ${selectedFeatures.length} features.`);
+    }
+    map.on('draw.create', function(e) {
+        // Get the drawn polygon
+        const drawnPolygon = e.features[0];
+        
+        // Process the drawn polygon and find intersecting features (for properties only)
+        processDrawnPolygon(drawnPolygon);
+    });
+    map.on('click', function(e) {
+        if (selecting && draw.getMode() === 'simple_select') {
+            // If we're in selection mode but not actively drawing,
+            // restart the drawing mode
+            draw.changeMode('draw_polygon');
+        }
+    });
+    map.on('draw.delete', function() {
+        if (selecting) {
+            // Clear selection when drawn polygon is deleted
+            selectedFeatures = [];
+            updateSelectionStyle();
+        }
+    });
+
+    function processDrawnPolygon(drawnPolygon) {
+        $('#loading').show();
+        
+        try {
+            // First, find intersecting features to highlight them
+            const features = map.querySourceFeatures('geojson-source');
+            selectedFeatures = features.filter(feature => {
+                try {
+                    return turf.booleanIntersects(feature, drawnPolygon);
+                } catch (error) {
+                    console.error('Error checking intersection:', error);
+                    return false;
+                }
+            });
+            
+            // Update the selection styling to highlight intersecting features
+            updateSelectionStyle();
+            
+            // Get multiple points from the polygon to query Nominatim
+            const points = getSamplePointsFromPolygon(drawnPolygon);
+            
+            // Query Nominatim for each point
+            queryDistrictNames(points, drawnPolygon);
+        } catch (error) {
+            console.error('Error processing polygon:', error);
+            alert('Error processing polygon: ' + error.message);
+            $('#loading').hide();
+        }
+    }
+    function getSamplePointsFromPolygon(polygon) {
+        try {
+            const points = [];
+            
+            // Get center point
+            const center = turf.centroid(polygon);
+            points.push(center);
+            
+            // Get points along the boundary
+            const boundary = turf.polygonToLine(polygon);
+            const length = turf.length(boundary);
+            const pointCount = Math.min(Math.max(3, Math.ceil(length * 5)), 10); // 3-10 points based on perimeter
+            
+            for (let i = 0; i < pointCount; i++) {
+                const along = turf.along(boundary, (length / pointCount) * i);
+                points.push(along);
+            }
+            
+            return points;
+        } catch (error) {
+            console.error('Error getting sample points:', error);
+            // Fallback to just using the center
+            return [turf.centroid(polygon)];
+        }
+    }
+    function queryDistrictNames(points, drawnPolygon) {
+        const kelurahanNames = new Set();
+        const kecamatanNames = new Set();
+        const kabupatenNames = new Set();
+        let completedQueries = 0;
+        
+        // If no points to query
+        if (points.length === 0) {
+            finalizeFeatureWithDistricts(drawnPolygon, [], [], []);
+            return;
+        }
+        
+        // Queue for rate limiting (Nominatim allows ~1 request/second)
+        const queue = [];
+        let isProcessingQueue = false;
+        
+        // Add all point queries to the queue
+        points.forEach((point, index) => {
+            const [lng, lat] = turf.getCoord(point);
+            queue.push({ lng, lat, index });
+        });
+        
+        // Process the query queue with rate limiting
+        function processQueue() {
+            if (queue.length === 0) {
+                isProcessingQueue = false;
+                return;
+            }
+            
+            isProcessingQueue = true;
+            const next = queue.shift();
+            queryPoint(next.lng, next.lat, next.index);
+            
+            // Wait 1.1 seconds before processing the next query (respecting Nominatim rate limits)
+            setTimeout(processQueue, 1100);
+        }
+        
+        // Start processing the queue
+        if (!isProcessingQueue && queue.length > 0) {
+            processQueue();
+        }
+        
+        // Function to query a single point
+        function queryPoint(lng, lat, pointIndex) {
+            // Use Nominatim reverse geocoding
+            $.ajax({
+                url: 'https://nominatim.openstreetmap.org/reverse',
+                data: {
+                    format: 'json',
+                    lat: lat,
+                    lon: lng,
+                    zoom: 18, // Detailed level for getting kelurahan
+                    addressdetails: 1,
+                    "accept-language": 'id' // Indonesian language for better results
+                },
+                success: function(data) {
+                    try {
+                        // Extract Indonesian administrative levels
+                        if (data.address) {
+                            // Kelurahan (village/urban community)
+                            const kelurahan = 
+                                data.address.village || 
+                                data.address.suburb || 
+                                data.address.neighbourhood ||
+                                data.address.quarter;
+                            
+                            // Kecamatan (sub-district)
+                            const kecamatan = 
+                                data.address.subdistrict || 
+                                data.address.district || 
+                                data.address.city_district;
+                            
+                            // Kabupaten/Kota (regency/city)
+                            const kabupaten = 
+                                data.address.city || 
+                                data.address.town || 
+                                data.address.regency || 
+                                data.address.county;
+                            
+                            // Add to our sets if found
+                            if (kelurahan) kelurahanNames.add(kelurahan);
+                            if (kecamatan) kecamatanNames.add(kecamatan);
+                            if (kabupaten) kabupatenNames.add(kabupaten);
+                            
+                            // Update query point properties to show found values
+                            if (map.getSource('query-points-source')) {
+                                const features = map.getSource('query-points-source')._data.features;
+                                if (features[pointIndex]) {
+                                    features[pointIndex].properties.kelurahan = kelurahan || 'N/A';
+                                    features[pointIndex].properties.kecamatan = kecamatan || 'N/A';
+                                    features[pointIndex].properties.kabupaten = kabupaten || 'N/A';
+                                    
+                                    map.getSource('query-points-source').setData({
+                                        type: 'FeatureCollection',
+                                        features: features
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error processing Nominatim response:', error);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Nominatim API error:', error);
+                },
+                complete: function() {
+                    completedQueries++;
+                    
+                    // When all queries are done
+                    if (completedQueries === points.length) {
+                        finalizeFeatureWithDistricts(
+                            drawnPolygon,
+                            Array.from(kelurahanNames),
+                            Array.from(kecamatanNames),
+                            Array.from(kabupatenNames)
+                        );
+                    }
+                }
+            });
+        }
+    }
+    function finalizeFeatureWithDistricts(drawnPolygon, kelurahanNames, kecamatanNames, kabupatenNames) {
+        // Create the feature using the drawn polygon geometry
+        mergedFeature = {
+            type: 'Feature',
+            geometry: drawnPolygon.geometry,
+            properties: {
+                id: 'drawn',
+                name: 'Drawn Feature',
+                area_km2: turf.area(drawnPolygon) / 1000000, // Convert m² to km²
+                perimeter_km: turf.length(turf.polygonToLine(drawnPolygon)) / 1000, // Convert m to km
+                kelurahan: kelurahanNames.join(', ') || 'Unknown',
+                kec: kecamatanNames.join(', ') || 'Unknown',
+                kab: kabupatenNames.join(', ') || 'Unknown'
+            }
+        };
+        
+        // Update the map with the drawn feature
+        displayDrawnFeature();
+        
+        // Enable PDF button
+        $('#pdf-button').prop('disabled', false);
+        
+        $('#loading').hide();
+        
+        // Show results
+        alert(`Found ${kelurahanNames.length} kelurahan, ${kecamatanNames.length} kecamatan, and ${kabupatenNames.length} kabupaten in the drawn area.`);
+    }
+    
+    // Function to display the drawn feature
+    function displayDrawnFeature() {
+        if (!mergedFeature) return;
+        
+        // If merged source already exists, update it
+        if (map.getSource('merged-source')) {
+            map.getSource('merged-source').setData({
+                type: 'FeatureCollection',
+                features: [mergedFeature]
+            });
+        } else {
+            // Add drawn feature source and layers
+            map.addSource('merged-source', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: [mergedFeature]
+                }
+            });
+            
+            // Add fill layer for drawn feature
+            map.addLayer({
+                id: 'merged-fill',
+                type: 'fill',
+                source: 'merged-source',
+                paint: {
+                    'fill-color': '#32CD32',
+                    'fill-opacity': 0.6
+                }
+            });
+            
+            // Add outline for drawn feature
+            map.addLayer({
+                id: 'merged-line',
+                type: 'line',
+                source: 'merged-source',
+                paint: {
+                    'line-color': '#006400',
+                    'line-width': 2
+                }
+            });
+        }
+    }
     
     // Add scale control
     const scale = new maplibregl.ScaleControl({
@@ -137,46 +445,46 @@ $(document).ready(function() {
     function loadGeoJSON() {
         $('#loading').show();
         // Add the source
-        map.addSource('geojson-source', {
-            type: 'geojson',
-            data: kec_boundaries
-        });
+        // map.addSource('geojson-source', {
+        //     type: 'geojson',
+        //     data: kec_boundaries
+        // });
         
         // Add fill layer
-        map.addLayer({
-            id: 'geojson-fill',
-            type: 'fill',
-            source: 'geojson-source',
-            paint: {
-                'fill-color': [
-                    'case',
-                    ['in', ['get', 'id'], ['literal', selectedFeatures.map(f => f.properties.id)]],
-                    '#ff9e00',
-                    '#0080ff'
-                ],
-                'fill-opacity': 0.5
-            }
-        });
+        // map.addLayer({
+        //     id: 'geojson-fill',
+        //     type: 'fill',
+        //     source: 'geojson-source',
+        //     paint: {
+        //         'fill-color': [
+        //             'case',
+        //             ['in', ['get', 'id'], ['literal', selectedFeatures.map(f => f.properties.id)]],
+        //             '#ff9e00',
+        //             '#0080ff'
+        //         ],
+        //         'fill-opacity': 0.01
+        //     }
+        // });
         
         // Add line layer
-        map.addLayer({
-            id: 'geojson-line',
-            type: 'line',
-            source: 'geojson-source',
-            paint: {
-                'line-color': '#000',
-                'line-width': 1
-            }
-        });
+        // map.addLayer({
+        //     id: 'geojson-line',
+        //     type: 'line',
+        //     source: 'geojson-source',
+        //     paint: {
+        //         'line-color': '#000',
+        //         'line-width': 1
+        //     }
+        // });
         
         // Fit map to GeoJSON bounds
-        if (kec_boundaries.features.length > 0) {
-            const bounds = turf.bbox(kec_boundaries);
-            map.fitBounds([
-                [bounds[0], bounds[1]],
-                [bounds[2], bounds[3]]
-            ], { padding: 50 });
-        }
+        // if (kec_boundaries.features.length > 0) {
+        //     const bounds = turf.bbox(kec_boundaries);
+        //     map.fitBounds([
+        //         [bounds[0], bounds[1]],
+        //         [bounds[2], bounds[3]]
+        //     ], { padding: 50 });
+        // }
         
         $('#loading').hide();
     }
@@ -224,23 +532,42 @@ $(document).ready(function() {
         }
     }
     $('#select-button').click(function(){
-        map.off('click', 'geojson-fill', geoFillClicked);
         selecting = !selecting;
+        
         if (selecting) {
-            // Entering selection mode
-            map.on('click', 'geojson-fill', geoFillClicked);
-            $(this).text('Cancel Selection').removeClass('btn-primary')
-            .addClass('btn-danger');
-            $('#merge-button').prop('disabled', false);
+            // Entering drawing mode
+            // Remove any previous click handler for direct selection
+            map.off('click', 'geojson-fill', geoFillClicked);
+            
+            // Change button text
+            $(this).text('Cancel Drawing').removeClass('btn-primary')
+                .addClass('btn-danger');
+            
+            // Start polygon drawing mode
+            draw.changeMode('draw_polygon');
         } else {
-            // Canceling selection mode
-            selectedFeatures=[]
+            // Canceling drawing mode
+            draw.deleteAll();
+            selectedFeatures = [];
             updateSelectionStyle();
-            $(this).text('Select Places').removeClass('btn-danger')
-            .addClass('btn-primary');
-            $('#merge-button').prop('disabled', true);
+            
+            // Change button text back
+            $(this).text('Draw Selection').removeClass('btn-danger')
+                .addClass('btn-primary');
+            
+            // Remove merged feature if it exists
+            if (map.getSource('merged-source')) {
+                map.removeLayer('merged-fill');
+                map.removeLayer('merged-line');
+                map.removeSource('merged-source');
+                mergedFeature = null;
+            }
+            
+            // Disable PDF button
+            $('#pdf-button').prop('disabled', true);
         }
-    })
+    });
+    
     // Merge selected features
     $('#merge-button').click(function() {
         if (selectedFeatures.length < 2) {

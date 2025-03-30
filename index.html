@@ -10,7 +10,10 @@
     
     <!-- MapLibre GL JS CSS -->
     <link href="https://unpkg.com/maplibre-gl@^5.2.0/dist/maplibre-gl.css" rel="stylesheet" />
-    
+    <link
+        rel="stylesheet"
+        href="https://www.unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.css"
+    />
     <!-- Font Awesome for icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
@@ -71,7 +74,7 @@
             <div id="merge-button-container" class="container row">
                 <div class="col-6 d-grid gap-2">
                     <button class="btn btn-sm btn-primary position-relative" id="select-button">
-                        Select Places
+                        Draw Area
                     </button>
                 </div>
                 <div class="col-6 d-grid gap-2">
@@ -110,10 +113,10 @@
     
     <!-- MapLibre GL JS -->
     <script src="https://unpkg.com/maplibre-gl@^5.2.0/dist/maplibre-gl.js"></script>
-    
+    <script src="https://www.unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.js"></script>
     <!-- Turf.js for GeoJSON operations -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
-    <script src="assets/data/kec_sample.js"></script>
+    <!-- <script src="assets/data/kec_sample.js"></script> -->
     <script src="assets/js/main.js"></script>
 </body>
 </html>
