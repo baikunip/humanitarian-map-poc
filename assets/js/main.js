@@ -11,49 +11,49 @@ const teams = [
       teamName: "Africa Programs",
       region: "Africa",
       manager: "John Doe",
-      parentTeam: "T001"
+      parentTeam: "Global Operations"
     },
     {
       teamId: "T003",
       teamName: "Asia Programs",
       region: "Asia",
       manager: "Sarah Wong",
-      parentTeam: "T001"
+      parentTeam: "Global Operations"
     },
     {
       teamId: "T004",
       teamName: "Kenya Projects",
       region: "Kenya",
       manager: "Alice Johnson",
-      parentTeam: "T002"
+      parentTeam: "Africa Programs"
     },
     {
       teamId: "T006",
       teamName: "Nairobi Initiative",
       region: "Nairobi",
       manager: "Bob Williams",
-      parentTeam: "T004"
+      parentTeam: "Kenya Projects"
     },
     {
       teamId: "T007",
       teamName: "India Programs",
       region: "India",
       manager: "Raj Patel",
-      parentTeam: "T003"
+      parentTeam: "Asia Programs"
     },
     {
       teamId: "T008",
       teamName: "Delhi Projects",
       region: "Delhi",
       manager: "Priya Sharma",
-      parentTeam: "T007"
+      parentTeam: "India Programs"
     },
     {
       teamId: "T009",
       teamName: "Mumbai Projects",
       region: "Mumbai",
       manager: "Arjun Singh",
-      parentTeam: "T007"
+      parentTeam: "India Programs"
     }
   ];
   
@@ -122,37 +122,6 @@ $(document).ready(function() {
     // Add navigation controls
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
     map.addControl(draw, 'top-right');
-    function selectFeaturesWithinPolygon(drawnPolygon) {
-        // Clear previous selection
-        selectedFeatures = [];
-        
-        // Get all features from the geojson source
-        const features = map.querySourceFeatures('geojson-source');
-        
-        // For each feature, check if it intersects with the drawn polygon
-        features.forEach(feature => {
-            try {
-                // Check for intersection using Turf.js
-                const intersection = turf.booleanIntersects(feature, drawnPolygon);
-                
-                if (intersection) {
-                    // Add to selected features
-                    selectedFeatures.push(feature);
-                }
-            } catch (error) {
-                console.error('Error checking intersection:', error, feature);
-            }
-        });
-        
-        // Update the selection styling
-        updateSelectionStyle();
-        
-        // Optional: Delete the drawn polygon after selection
-        // draw.deleteAll();
-        
-        // Show count of selected features
-        alert(`Selected ${selectedFeatures.length} features.`);
-    }
     map.on('draw.create', function(e) {
         // Get the drawn polygon
         const drawnPolygon = e.features[0];
@@ -233,11 +202,12 @@ $(document).ready(function() {
         const kelurahanNames = new Set();
         const kecamatanNames = new Set();
         const kabupatenNames = new Set();
+        const fullAddressNames = new Set();
         let completedQueries = 0;
         
         // If no points to query
         if (points.length === 0) {
-            finalizeFeatureWithDistricts(drawnPolygon, [], [], []);
+            finalizeFeatureWithDistricts(drawnPolygon, [], [], [],[]);
             return;
         }
         
@@ -303,15 +273,16 @@ $(document).ready(function() {
                             
                             // Kabupaten/Kota (regency/city)
                             const kabupaten = 
-                                data.address.city || 
-                                data.address.town || 
-                                data.address.regency || 
-                                data.address.county;
-                            
+                                // data.address.city || 
+                                // data.address.town || 
+                                data.address.regency;
+                                // data.address.county;
+                            const country = data.address.country;
                             // Add to our sets if found
                             if (kelurahan) kelurahanNames.add(kelurahan);
                             if (kecamatan) kecamatanNames.add(kecamatan);
                             if (kabupaten) kabupatenNames.add(kabupaten);
+                            fullAddressNames.add("kel: "+kelurahan+", kec: "+kecamatan+", kab: "+kabupaten+", "+country);
                             
                             // Update query point properties to show found values
                             if (map.getSource('query-points-source')) {
@@ -320,12 +291,13 @@ $(document).ready(function() {
                                     features[pointIndex].properties.kelurahan = kelurahan || 'N/A';
                                     features[pointIndex].properties.kecamatan = kecamatan || 'N/A';
                                     features[pointIndex].properties.kabupaten = kabupaten || 'N/A';
-                                    
+                                    features[pointIndex].properties.fullAddress="kel: "+kelurahan+", kec: "+kecamatan+", kab: "+kabupaten+", "+country
                                     map.getSource('query-points-source').setData({
                                         type: 'FeatureCollection',
                                         features: features
                                     });
                                 }
+                                console.log(features[pointIndex])
                             }
                         }
                     } catch (error) {
@@ -344,26 +316,40 @@ $(document).ready(function() {
                             drawnPolygon,
                             Array.from(kelurahanNames),
                             Array.from(kecamatanNames),
-                            Array.from(kabupatenNames)
+                            Array.from(kabupatenNames),
+                            Array.from(fullAddressNames)
                         );
                     }
                 }
             });
         }
     }
-    function finalizeFeatureWithDistricts(drawnPolygon, kelurahanNames, kecamatanNames, kabupatenNames) {
+    function finalizeFeatureWithDistricts(drawnPolygon, kelurahanNames, kecamatanNames, kabupatenNames,fullAddressNames) {
         // Create the feature using the drawn polygon geometry
+        const selectedTeamId = $('#team-select').val();
+        let selectedTeamName = "Selected Area";
+        let selectedTeamParent='';
+        console.log("full address: ",fullAddressNames)
+        // Find the team name from the teams array
+        if (selectedTeamId) {
+            const selectedTeam = teams.find(team => team.teamId === selectedTeamId);
+            if (selectedTeam) {
+                selectedTeamName = selectedTeam.teamName;
+                selectedTeamParent=selectedTeam.parentTeam;
+            }
+        }
         mergedFeature = {
             type: 'Feature',
             geometry: drawnPolygon.geometry,
             properties: {
-                id: 'drawn',
-                name: 'Drawn Feature',
-                area_km2: turf.area(drawnPolygon) / 1000000, // Convert m² to km²
-                perimeter_km: turf.length(turf.polygonToLine(drawnPolygon)) / 1000, // Convert m to km
-                kelurahan: kelurahanNames.join(', ') || 'Unknown',
-                kec: kecamatanNames.join(', ') || 'Unknown',
-                kab: kabupatenNames.join(', ') || 'Unknown'
+                "Parent's Team":selectedTeamParent,
+                "Team Name":selectedTeamName,
+                "Area (Km2)": turf.area(drawnPolygon) / 1000000, // Convert m² to km²
+                "Perimeter (Km)": turf.length(turf.polygonToLine(drawnPolygon)) / 1000, // Convert m to km
+                // "Kelurahan": kelurahanNames.join(', ') || 'Unknown',
+                // "Kecamatan": kecamatanNames.join(', ') || 'Unknown',
+                // "Kabupaten": kabupatenNames.join(', ') || 'Unknown'
+                fullAddress:fullAddressNames.join(', ') || 'Unknown'
             }
         };
         
@@ -437,7 +423,6 @@ $(document).ready(function() {
     });
     
     // Store GeoJSON data and selected features
-    let geojsonData = null;
     let selectedFeatures = [];
     let mergedFeature = null;
     let selecting = false;
@@ -567,98 +552,6 @@ $(document).ready(function() {
             $('#pdf-button').prop('disabled', true);
         }
     });
-    
-    // Merge selected features
-    $('#merge-button').click(function() {
-        if (selectedFeatures.length < 2) {
-            alert('Please select at least two features to merge.');
-            return;
-        }
-        
-        $('#loading').show();
-        
-        try {
-            // Create a feature collection from selected features
-            const featureCollection = {
-                type: 'FeatureCollection',
-                features: selectedFeatures
-            };
-            
-            // Perform union operation with turf.js
-            let union = selectedFeatures[0];
-            for (let i = 1; i < selectedFeatures.length; i++) {
-                union = turf.union(union, selectedFeatures[i]);
-            }
-            
-            // Create merged feature with combined properties
-            mergedFeature = {
-                type: 'Feature',
-                geometry: union.geometry,
-                properties: {
-                    id: 'merged',
-                    name: 'Merged Feature',
-                    area_km2: turf.area(union) / 1000000, // Convert m² to km²
-                    perimeter_km: turf.length(turf.polygonToLine(union)) / 1000, // Convert m to km
-                    kec: selectedFeatures.map(f => f.properties.WADMKC).join(', '),
-                    kab: selectedFeatures.map(f => f.properties.WADMKK).join(', ')
-                }
-            };
-            
-            // Update the map with the merged feature
-            if (map.getSource('merged-source')) {
-                map.getSource('merged-source').setData({
-                    type: 'FeatureCollection',
-                    features: [mergedFeature]
-                });
-            } else {
-                // Add merged feature source and layers
-                map.addSource('merged-source', {
-                    type: 'geojson',
-                    data: {
-                        type: 'FeatureCollection',
-                        features: [mergedFeature]
-                    }
-                });
-                
-                // Add fill layer for merged feature
-                map.addLayer({
-                    id: 'merged-fill',
-                    type: 'fill',
-                    source: 'merged-source',
-                    paint: {
-                        'fill-color': '#32CD32',
-                        'fill-opacity': 0.6
-                    }
-                });
-                
-                // Add outline for merged feature
-                map.addLayer({
-                    id: 'merged-line',
-                    type: 'line',
-                    source: 'merged-source',
-                    paint: {
-                        'line-color': '#006400',
-                        'line-width': 2
-                    }
-                });
-            }
-            
-            // Clear selection
-            selectedFeatures = [];
-            updateSelectionStyle();
-            selecting = false;
-            $('#select-button').text('Select Places').removeClass('btn-danger').addClass('btn-primary');
-            
-            // Enable PDF button
-            $('#pdf-button').prop('disabled', false);
-            alert('Features successfully merged!');
-        } catch (error) {
-            console.error('Error merging features:', error);
-            alert('Error merging features. Please try again with different selections.');
-        }
-        
-        $('#loading').hide();
-    });
     // PDF Export function with dedicated map canvas
     // Enhanced PDF Export function with team name title and deduplicated kab values
 $('#pdf-button').click(function() {
@@ -785,11 +678,11 @@ $('#pdf-button').click(function() {
                 
                 // Add caption
                 doc.setFontSize(10);
-                doc.text('Merged Feature Visualization', 105, Math.min(imgHeight, 100) + 35, { align: 'center' });
+                // doc.text('Merged Feature Visualization', 105, Math.min(imgHeight, 100) + 35, { align: 'center' });
                 
                 // Add feature attributes table
                 doc.setFontSize(14);
-                doc.text('Merged Feature Attributes', 14, Math.min(imgHeight, 100) + 45);
+                doc.text('Drawn Feature Attributes', 14, Math.min(imgHeight, 100) + 45);
                 
                 // Format properties for table with deduplication for kab and kec
                 const tableData = [];
@@ -800,6 +693,9 @@ $('#pdf-button').click(function() {
                     if (typeof value === 'number') {
                         tableData.push([key, value.toFixed(2)]);
                     } 
+                    else if (key==="fullAddress"){
+
+                    }
                     // Deduplicate comma-separated values for kab and kec
                     else if (key === 'kab' || key === 'kec') {
                         if (typeof value === 'string') {
@@ -810,7 +706,7 @@ $('#pdf-button').click(function() {
                                      .filter(v => v !== '')
                             )];
                             // Join back with commas
-                            tableData.push([key, uniqueValues.join(', ')]);
+                            tableData.push([key, uniqueValues.join('| ')]);
                         } else {
                             tableData.push([key, value]);
                         }
