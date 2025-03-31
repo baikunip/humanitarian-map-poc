@@ -9,11 +9,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     
     <!-- MapLibre GL JS CSS -->
-    <link href="https://unpkg.com/maplibre-gl@^5.2.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link
-        rel="stylesheet"
-        href="https://www.unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.css"
-    />
+    <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.3.0/dist/maplibre-gl.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/mapbox-gl-draw/1.5.0/mapbox-gl-draw.min.css" integrity="sha512-hD3GGHhJxDKrpN78QgLsPRc4tFrj7RSlcAHnAgOBug4gAeFfbIwCR8/xgYA1ZNKRRN7CsSkMrxIh4FC6xDLFdA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Font Awesome for icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
@@ -41,7 +38,7 @@
     <div id="map-container">
         <div id="map">
             <!-- Loading Indicator -->
-            <div class="loading-indicator" id="loading">
+            <div class="loading-indicator justify-content-center" id="loading">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
@@ -100,11 +97,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     
     <!-- MapLibre GL JS -->
-    <script src="https://unpkg.com/maplibre-gl@^5.2.0/dist/maplibre-gl.js"></script>
-    <script src="https://www.unpkg.com/@mapbox/mapbox-gl-draw@1.5.0/dist/mapbox-gl-draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.3.0/dist/maplibre-gl.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mapbox-gl-draw/1.5.0/mapbox-gl-draw.min.js" integrity="sha512-/dvTZnsXND26l4cDCJdIpNzr1h4hV+tPfPPVq1an4yWj9pDXMZjM+Rnq2f8iGgl3sgZ7DUDdfq4EWLA4C78miQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- Turf.js for GeoJSON operations -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
-    <!-- <script src="assets/data/kec_sample.js"></script> -->
+    <script src="assets/data/kec_sample.js"></script>
     <script src="assets/js/main.js"></script>
 </body>
 </html>

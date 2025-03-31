@@ -1,70 +1,63 @@
 const teams = [
     {
-      teamId: "T001",
-      teamName: "Global Operations",
-      region: "Global",
-      manager: "Jane Smith",
-      parentTeam: null
-    },
-    {
-      teamId: "T002",
-      teamName: "Africa Programs",
-      region: "Africa",
-      manager: "John Doe",
-      parentTeam: "Global Operations"
-    },
-    {
-      teamId: "T003",
-      teamName: "Asia Programs",
-      region: "Asia",
-      manager: "Sarah Wong",
-      parentTeam: "Global Operations"
-    },
-    {
-      teamId: "T004",
-      teamName: "Kenya Projects",
-      region: "Kenya",
-      manager: "Alice Johnson",
-      parentTeam: "Africa Programs"
-    },
-    {
-      teamId: "T006",
-      teamName: "Nairobi Initiative",
-      region: "Nairobi",
-      manager: "Bob Williams",
-      parentTeam: "Kenya Projects"
-    },
-    {
-      teamId: "T007",
-      teamName: "India Programs",
-      region: "India",
-      manager: "Raj Patel",
-      parentTeam: "Asia Programs"
-    },
-    {
-      teamId: "T008",
-      teamName: "Delhi Projects",
-      region: "Delhi",
-      manager: "Priya Sharma",
-      parentTeam: "India Programs"
-    },
-    {
-      teamId: "T009",
-      teamName: "Mumbai Projects",
-      region: "Mumbai",
-      manager: "Arjun Singh",
-      parentTeam: "India Programs"
-    }
+        teamId: "T001",
+        teamName: "Global Operations",
+        region: "Global",
+        manager: "Jane Smith",
+        parentTeam: "-"
+      },
+      {
+        teamId: "T002",
+        teamName: "Africa Programs",
+        region: "Africa",
+        manager: "John Doe",
+        parentTeam: "Global Operations"
+      },
+      {
+        teamId: "T003",
+        teamName: "Asia Programs",
+        region: "Asia",
+        manager: "Sarah Wong",
+        parentTeam: "Global Operations"
+      },
+      {
+        teamId: "T004",
+        teamName: "Kenya Projects",
+        region: "Kenya",
+        manager: "Alice Johnson",
+        parentTeam: "Africa Programs"
+      },
+      {
+        teamId: "T006",
+        teamName: "Nairobi Initiative",
+        region: "Nairobi",
+        manager: "Bob Williams",
+        parentTeam: "Kenya Projects"
+      },
+      {
+        teamId: "T007",
+        teamName: "India Programs",
+        region: "India",
+        manager: "Raj Patel",
+        parentTeam: "Asia Programs"
+      },
+      {
+        teamId: "T008",
+        teamName: "Delhi Projects",
+        region: "Delhi",
+        manager: "Priya Sharma",
+        parentTeam: "India Programs"
+      },
+      {
+        teamId: "T009",
+        teamName: "Mumbai Projects",
+        region: "Mumbai",
+        manager: "Arjun Singh",
+        parentTeam: "India Programs"
+      }
   ];
   
 $(document).ready(function() {
-    const draw = new MapboxDraw({
-        displayControlsDefault: false,
-        controls: {
-            polygon: true,
-            trash: true
-        }
-    });
     const $select = $('#team-select');
     // Append new options
     teams.forEach(team => {
@@ -118,10 +111,15 @@ $(document).ready(function() {
         center: [107.6, -6.9], // Indonesia's approximate coordinates
         zoom: 6
     });
-    
-    // Add navigation controls
-    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        controls: {
+            polygon: true,
+            trash: true
+        }
+    });
     map.addControl(draw, 'top-right');
+
     map.on('draw.create', function(e) {
         // Get the drawn polygon
         const drawnPolygon = e.features[0];
@@ -129,240 +127,72 @@ $(document).ready(function() {
         // Process the drawn polygon and find intersecting features (for properties only)
         processDrawnPolygon(drawnPolygon);
     });
-    map.on('click', function(e) {
-        if (selecting && draw.getMode() === 'simple_select') {
-            // If we're in selection mode but not actively drawing,
-            // restart the drawing mode
-            draw.changeMode('draw_polygon');
-        }
-    });
-    map.on('draw.delete', function() {
-        if (selecting) {
-            // Clear selection when drawn polygon is deleted
-            selectedFeatures = [];
-            updateSelectionStyle();
-        }
-    });
-
     function processDrawnPolygon(drawnPolygon) {
         $('#loading').show();
-        
         try {
-            // First, find intersecting features to highlight them
+            // Get all features from the geojson source that intersect with the drawn polygon
             const features = map.querySourceFeatures('geojson-source');
-            selectedFeatures = features.filter(feature => {
+            const intersectingFeatures = [];
+            
+            // Create Sets to track unique address values
+            const uniqueAddresses = new Set();
+            
+            // For each feature, check if it intersects with the drawn polygon
+            features.forEach(feature => {
                 try {
-                    return turf.booleanIntersects(feature, drawnPolygon);
+                    feature.properties['address'] = 'Kec: ' + feature.properties.WADMKC + 
+                                                   ', Kab: ' + feature.properties.WADMKK + 
+                                                   ', Prov: ' + feature.properties.WADMPR + 
+                                                   ', Indonesia';
+                    
+                    // Check for intersection using Turf.js
+                    const intersection = turf.booleanIntersects(feature, drawnPolygon);
+                    
+                    if (intersection) {
+                        // Add to intersecting features (for properties only)
+                        intersectingFeatures.push(feature);
+                        
+                        // Add address to the unique set
+                        if (feature.properties.address) {
+                            uniqueAddresses.add(feature.properties.address);
+                        }
+                    }
                 } catch (error) {
-                    console.error('Error checking intersection:', error);
-                    return false;
+                    console.error('Error checking intersection:', error, feature);
                 }
             });
             
-            // Update the selection styling to highlight intersecting features
-            updateSelectionStyle();
+            // Use ONLY the drawn polygon for geometry
+            mergedFeature = {
+                type: 'Feature',
+                geometry: drawnPolygon.geometry, // Use the drawn polygon's geometry directly
+                properties: {
+                    area_km2: turf.area(drawnPolygon) / 1000000, // Convert m² to km²
+                    perimeter_km: turf.length(turf.polygonToLine(drawnPolygon)) / 1000, // Convert m to km
+                    // Include properties from intersecting features for reference only
+                    // kec: [...new Set(intersectingFeatures.map(f => f.properties.WADMKC || '').filter(Boolean))].join(', '),
+                    // kab: [...new Set(intersectingFeatures.map(f => f.properties.WADMKK || '').filter(Boolean))].join(', '),
+                    // Convert the Set to an array and join with |
+                    addr: [...uniqueAddresses].join('|')
+                }
+            };
             
-            // Get multiple points from the polygon to query Nominatim
-            const points = getSamplePointsFromPolygon(drawnPolygon);
+            // Update the map with the drawn feature
+            displayDrawnFeature();
             
-            // Query Nominatim for each point
-            queryDistrictNames(points, drawnPolygon);
+            // Enable PDF button
+            $('#pdf-button').prop('disabled', false);
+            
+            // Update the selection for visualization
+            selectedFeatures = intersectingFeatures;
+            
+            alert(`Successfully create working area!`);
         } catch (error) {
             console.error('Error processing polygon:', error);
             alert('Error processing polygon: ' + error.message);
-            $('#loading').hide();
         }
-    }
-    function getSamplePointsFromPolygon(polygon) {
-        try {
-            const points = [];
-            
-            // Get center point
-            const center = turf.centroid(polygon);
-            points.push(center);
-            
-            // Get points along the boundary
-            const boundary = turf.polygonToLine(polygon);
-            const length = turf.length(boundary);
-            const pointCount = Math.min(Math.max(3, Math.ceil(length * 5)), 10); // 3-10 points based on perimeter
-            
-            for (let i = 0; i < pointCount; i++) {
-                const along = turf.along(boundary, (length / pointCount) * i);
-                points.push(along);
-            }
-            
-            return points;
-        } catch (error) {
-            console.error('Error getting sample points:', error);
-            // Fallback to just using the center
-            return [turf.centroid(polygon)];
-        }
-    }
-    function queryDistrictNames(points, drawnPolygon) {
-        const kelurahanNames = new Set();
-        const kecamatanNames = new Set();
-        const kabupatenNames = new Set();
-        const fullAddressNames = new Set();
-        let completedQueries = 0;
-        
-        // If no points to query
-        if (points.length === 0) {
-            finalizeFeatureWithDistricts(drawnPolygon, [], [], [],[]);
-            return;
-        }
-        
-        // Queue for rate limiting (Nominatim allows ~1 request/second)
-        const queue = [];
-        let isProcessingQueue = false;
-        
-        // Add all point queries to the queue
-        points.forEach((point, index) => {
-            const [lng, lat] = turf.getCoord(point);
-            queue.push({ lng, lat, index });
-        });
-        
-        // Process the query queue with rate limiting
-        function processQueue() {
-            if (queue.length === 0) {
-                isProcessingQueue = false;
-                return;
-            }
-            
-            isProcessingQueue = true;
-            const next = queue.shift();
-            queryPoint(next.lng, next.lat, next.index);
-            
-            // Wait 1.1 seconds before processing the next query (respecting Nominatim rate limits)
-            setTimeout(processQueue, 1100);
-        }
-        
-        // Start processing the queue
-        if (!isProcessingQueue && queue.length > 0) {
-            processQueue();
-        }
-        
-        // Function to query a single point
-        function queryPoint(lng, lat, pointIndex) {
-            // Use Nominatim reverse geocoding
-            $.ajax({
-                url: 'https://nominatim.openstreetmap.org/reverse',
-                data: {
-                    format: 'json',
-                    lat: lat,
-                    lon: lng,
-                    zoom: 18, // Detailed level for getting kelurahan
-                    addressdetails: 1,
-                    "accept-language": 'id' // Indonesian language for better results
-                },
-                success: function(data) {
-                    try {
-                        // Extract Indonesian administrative levels
-                        if (data.address) {
-                            // Kelurahan (village/urban community)
-                            const kelurahan = 
-                                data.address.village || 
-                                data.address.suburb || 
-                                data.address.neighbourhood ||
-                                data.address.quarter;
-                            
-                            // Kecamatan (sub-district)
-                            const kecamatan = 
-                                data.address.subdistrict || 
-                                data.address.district || 
-                                data.address.city_district;
-                            
-                            // Kabupaten/Kota (regency/city)
-                            const kabupaten = 
-                                // data.address.city || 
-                                // data.address.town || 
-                                data.address.regency;
-                                // data.address.county;
-                            const country = data.address.country;
-                            // Add to our sets if found
-                            if (kelurahan) kelurahanNames.add(kelurahan);
-                            if (kecamatan) kecamatanNames.add(kecamatan);
-                            if (kabupaten) kabupatenNames.add(kabupaten);
-                            fullAddressNames.add("kel: "+kelurahan+", kec: "+kecamatan+", kab: "+kabupaten+", "+country);
-                            
-                            // Update query point properties to show found values
-                            if (map.getSource('query-points-source')) {
-                                const features = map.getSource('query-points-source')._data.features;
-                                if (features[pointIndex]) {
-                                    features[pointIndex].properties.kelurahan = kelurahan || 'N/A';
-                                    features[pointIndex].properties.kecamatan = kecamatan || 'N/A';
-                                    features[pointIndex].properties.kabupaten = kabupaten || 'N/A';
-                                    features[pointIndex].properties.fullAddress="kel: "+kelurahan+", kec: "+kecamatan+", kab: "+kabupaten+", "+country
-                                    map.getSource('query-points-source').setData({
-                                        type: 'FeatureCollection',
-                                        features: features
-                                    });
-                                }
-                                console.log(features[pointIndex])
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error processing Nominatim response:', error);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Nominatim API error:', error);
-                },
-                complete: function() {
-                    completedQueries++;
-                    
-                    // When all queries are done
-                    if (completedQueries === points.length) {
-                        finalizeFeatureWithDistricts(
-                            drawnPolygon,
-                            Array.from(kelurahanNames),
-                            Array.from(kecamatanNames),
-                            Array.from(kabupatenNames),
-                            Array.from(fullAddressNames)
-                        );
-                    }
-                }
-            });
-        }
-    }
-    function finalizeFeatureWithDistricts(drawnPolygon, kelurahanNames, kecamatanNames, kabupatenNames,fullAddressNames) {
-        // Create the feature using the drawn polygon geometry
-        const selectedTeamId = $('#team-select').val();
-        let selectedTeamName = "Selected Area";
-        let selectedTeamParent='';
-        console.log("full address: ",fullAddressNames)
-        // Find the team name from the teams array
-        if (selectedTeamId) {
-            const selectedTeam = teams.find(team => team.teamId === selectedTeamId);
-            if (selectedTeam) {
-                selectedTeamName = selectedTeam.teamName;
-                selectedTeamParent=selectedTeam.parentTeam;
-            }
-        }
-        mergedFeature = {
-            type: 'Feature',
-            geometry: drawnPolygon.geometry,
-            properties: {
-                "Parent's Team":selectedTeamParent,
-                "Team Name":selectedTeamName,
-                "Area (Km2)": turf.area(drawnPolygon) / 1000000, // Convert m² to km²
-                "Perimeter (Km)": turf.length(turf.polygonToLine(drawnPolygon)) / 1000, // Convert m to km
-                // "Kelurahan": kelurahanNames.join(', ') || 'Unknown',
-                // "Kecamatan": kecamatanNames.join(', ') || 'Unknown',
-                // "Kabupaten": kabupatenNames.join(', ') || 'Unknown'
-                fullAddress:fullAddressNames.join(', ') || 'Unknown'
-            }
-        };
-        
-        // Update the map with the drawn feature
-        displayDrawnFeature();
-        
-        // Enable PDF button
-        $('#pdf-button').prop('disabled', false);
         
         $('#loading').hide();
-        
-        // Show results
-        alert(`Found ${kelurahanNames.length} kelurahan, ${kecamatanNames.length} kecamatan, and ${kabupatenNames.length} kabupaten in the drawn area.`);
     }
     
     // Function to display the drawn feature
@@ -392,7 +222,7 @@ $(document).ready(function() {
                 source: 'merged-source',
                 paint: {
                     'fill-color': '#32CD32',
-                    'fill-opacity': 0.6
+                    'fill-opacity': 0
                 }
             });
             
@@ -403,11 +233,13 @@ $(document).ready(function() {
                 source: 'merged-source',
                 paint: {
                     'line-color': '#006400',
-                    'line-width': 2
+                    'line-width': 0.6
                 }
             });
         }
     }
+    // Add navigation controls
+    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
     
     // Add scale control
     const scale = new maplibregl.ScaleControl({
@@ -430,46 +262,46 @@ $(document).ready(function() {
     function loadGeoJSON() {
         $('#loading').show();
         // Add the source
-        // map.addSource('geojson-source', {
-        //     type: 'geojson',
-        //     data: kec_boundaries
-        // });
+        map.addSource('geojson-source', {
+            type: 'geojson',
+            data: kec_boundaries
+        });
         
         // Add fill layer
-        // map.addLayer({
-        //     id: 'geojson-fill',
-        //     type: 'fill',
-        //     source: 'geojson-source',
-        //     paint: {
-        //         'fill-color': [
-        //             'case',
-        //             ['in', ['get', 'id'], ['literal', selectedFeatures.map(f => f.properties.id)]],
-        //             '#ff9e00',
-        //             '#0080ff'
-        //         ],
-        //         'fill-opacity': 0.01
-        //     }
-        // });
+        map.addLayer({
+            id: 'geojson-fill',
+            type: 'fill',
+            source: 'geojson-source',
+            paint: {
+                'fill-color': [
+                    'case',
+                    ['in', ['get', 'id'], ['literal', selectedFeatures.map(f => f.properties.id)]],
+                    '#ff9e00',
+                    '#0080ff'
+                ],
+                'fill-opacity': 0
+            }
+        });
         
         // Add line layer
-        // map.addLayer({
-        //     id: 'geojson-line',
-        //     type: 'line',
-        //     source: 'geojson-source',
-        //     paint: {
-        //         'line-color': '#000',
-        //         'line-width': 1
-        //     }
-        // });
+        map.addLayer({
+            id: 'geojson-line',
+            type: 'line',
+            source: 'geojson-source',
+            paint: {
+                'line-color': '#000',
+                'line-width': .5
+            }
+        });
         
         // Fit map to GeoJSON bounds
-        // if (kec_boundaries.features.length > 0) {
-        //     const bounds = turf.bbox(kec_boundaries);
-        //     map.fitBounds([
-        //         [bounds[0], bounds[1]],
-        //         [bounds[2], bounds[3]]
-        //     ], { padding: 50 });
-        // }
+        if (kec_boundaries.features.length > 0) {
+            const bounds = turf.bbox(kec_boundaries);
+            map.fitBounds([
+                [bounds[0], bounds[1]],
+                [bounds[2], bounds[3]]
+            ], { padding: 50 });
+        }
         
         $('#loading').hide();
     }
@@ -490,8 +322,6 @@ $(document).ready(function() {
                 // Remove from selection
                 selectedFeatures.splice(index, 1);
             }
-            // Update feature states
-            updateSelectionStyle();
         }
     }
     
@@ -505,17 +335,6 @@ $(document).ready(function() {
         map.getCanvas().style.cursor = '';
     });
     
-    // Update selection styling
-    function updateSelectionStyle() {
-        if (map.getSource('geojson-source')) {
-            map.setPaintProperty('geojson-fill', 'fill-color', [
-                'case',
-                ['in', ['get', 'id'], ['literal', selectedFeatures.map(f => f.properties.id)]],
-                '#ff9e00',
-                '#0080ff'
-            ]);
-        }
-    }
     $('#select-button').click(function(){
         selecting = !selecting;
         
@@ -534,7 +353,6 @@ $(document).ready(function() {
             // Canceling drawing mode
             draw.deleteAll();
             selectedFeatures = [];
-            updateSelectionStyle();
             
             // Change button text back
             $(this).text('Draw Selection').removeClass('btn-danger')
@@ -564,13 +382,13 @@ $('#pdf-button').click(function() {
     
     // Get the selected team name for the title
     const selectedTeamId = $('#team-select').val();
-    let selectedTeamName = "Selected Area";
-    
+    let selectedTeamName = "-",selectedTeamParent=null
     // Find the team name from the teams array
     if (selectedTeamId) {
         const selectedTeam = teams.find(team => team.teamId === selectedTeamId);
         if (selectedTeam) {
             selectedTeamName = selectedTeam.teamName;
+            selectedTeamParent = selectedTeam.parentTeam?'-':selectedTeam.parentTeam;
         }
     }
     
@@ -677,56 +495,63 @@ $('#pdf-button').click(function() {
                 doc.addImage(mapImage, 'PNG', 14, 30, imgWidth, Math.min(imgHeight, 100));
                 
                 // Add caption
-                doc.setFontSize(10);
-                // doc.text('Merged Feature Visualization', 105, Math.min(imgHeight, 100) + 35, { align: 'center' });
-                
                 // Add feature attributes table
                 doc.setFontSize(14);
-                doc.text('Drawn Feature Attributes', 14, Math.min(imgHeight, 100) + 45);
+                doc.text('Working Attributes', 14, Math.min(imgHeight, 100) + 45);
                 
-                // Format properties for table with deduplication for kab and kec
+                // Find the team name from the teams array
+                
                 const tableData = [];
-                
+                tableData.push(['Parent Team',selectedTeamParent])
+                tableData.push(['Team',selectedTeamName])
                 // Process the properties
                 Object.entries(mergedFeature.properties).forEach(([key, value]) => {
                     // Format numbers to 2 decimal places
                     if (typeof value === 'number') {
                         tableData.push([key, value.toFixed(2)]);
                     } 
-                    else if (key==="fullAddress"){
-
+                    else if(key==='addr'){
+                        let addrValues = value.split('|');
+                        // Format as a simple list with bullet points and line breaks
+                        let formattedAddrs = addrValues.map(addr => `• ${addr.trim()}`).join('\n');
+                        
+                        tableData.push(['Admins', formattedAddrs]);
                     }
                     // Deduplicate comma-separated values for kab and kec
-                    else if (key === 'kab' || key === 'kec') {
-                        if (typeof value === 'string') {
-                            // Split by comma, trim whitespace, filter out empty values, and deduplicate
-                            const uniqueValues = [...new Set(
-                                value.split(',')
-                                     .map(v => v.trim())
-                                     .filter(v => v !== '')
-                            )];
-                            // Join back with commas
-                            tableData.push([key, uniqueValues.join('| ')]);
-                        } else {
-                            tableData.push([key, value]);
-                        }
-                    } 
+                    // else if (key === 'kab' || key === 'kec') {
+                    //     if (typeof value === 'string') {
+                    //         // Split by comma, trim whitespace, filter out empty values, and deduplicate
+                    //         const uniqueValues = [...new Set(
+                    //             value.split(',')
+                    //                  .map(v => v.trim())
+                    //                  .filter(v => v !== '')
+                    //         )];
+                    //         // Join back with commas
+                    //         tableData.push([key, uniqueValues.join(', ')]);
+                    //     } else {
+                    //         tableData.push([key, value]);
+                    //     }
+                    // } 
                     // Handle other properties normally
                     else {
                         tableData.push([key, value]);
                     }
                 });
                 
-                // Add team information to the table
-                tableData.push(['team', selectedTeamName]);
-                
                 // Generate table
                 doc.autoTable({
                     startY: Math.min(imgHeight, 100) + 50,
-                    head: [['Attribute', 'Value']],
+                    // head: [['Attribute', 'Value']],
                     body: tableData,
                     theme: 'striped',
-                    headStyles: { fillColor: [0, 128, 255] }
+                    styles: {
+                        overflow: 'linebreak',
+                        cellWidth: 'auto'
+                    },
+                    columnStyles: {
+                        0: { fontStyle: 'bold' }, // Make the first column (attribute names) bold
+                        1: { cellWidth: 'auto' }
+                    }
                 });
                 
                 // Add footer
@@ -738,8 +563,17 @@ $('#pdf-button').click(function() {
                     doc.text('Page ' + i + ' of ' + pageCount, doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 10, { align: 'right' });
                 }
                 
-                // Save PDF
-                doc.save(`${selectedTeamName.replace(/\s+/g, '_')}_area_report.pdf`);
+                const now = new Date();
+                const timestamp = now.getFullYear().toString() +
+                                (now.getMonth() + 1).toString().padStart(2, '0') +
+                                now.getDate().toString().padStart(2, '0') +
+                                '_' +
+                                now.getHours().toString().padStart(2, '0') +
+                                now.getMinutes().toString().padStart(2, '0') +
+                                now.getSeconds().toString().padStart(2, '0');
+
+                // Save PDF with timestamp in filename
+                doc.save(`${selectedTeamName.replace(/\s+/g, '_')}_area_report_${timestamp}.pdf`);
                 
                 // Clean up - remove the temporary map
                 pdfMap.remove();
