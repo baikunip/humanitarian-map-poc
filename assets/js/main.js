@@ -388,7 +388,7 @@ $('#pdf-button').click(function() {
         const selectedTeam = teams.find(team => team.teamId === selectedTeamId);
         if (selectedTeam) {
             selectedTeamName = selectedTeam.teamName;
-            selectedTeamParent = selectedTeam.parentTeam?'-':selectedTeam.parentTeam;
+            selectedTeamParent = selectedTeam.parentTeam;
         }
     }
     
