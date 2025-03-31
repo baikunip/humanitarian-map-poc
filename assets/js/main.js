@@ -222,7 +222,7 @@ $(document).ready(function() {
                 source: 'merged-source',
                 paint: {
                     'fill-color': '#32CD32',
-                    'fill-opacity': 0
+                    'fill-opacity': .8
                 }
             });
             
@@ -233,7 +233,7 @@ $(document).ready(function() {
                 source: 'merged-source',
                 paint: {
                     'line-color': '#006400',
-                    'line-width': 0.6
+                    'line-width': 1
                 }
             });
         }
@@ -382,7 +382,7 @@ $('#pdf-button').click(function() {
     
     // Get the selected team name for the title
     const selectedTeamId = $('#team-select').val();
-    let selectedTeamName = "-",selectedTeamParent=null
+    let selectedTeamName = "-",selectedTeamParent=""
     // Find the team name from the teams array
     if (selectedTeamId) {
         const selectedTeam = teams.find(team => team.teamId === selectedTeamId);
@@ -500,7 +500,7 @@ $('#pdf-button').click(function() {
                 doc.text('Working Attributes', 14, Math.min(imgHeight, 100) + 45);
                 
                 // Find the team name from the teams array
-                
+                console.log(selectedTeamParent)
                 const tableData = [];
                 tableData.push(['Parent Team',selectedTeamParent])
                 tableData.push(['Team',selectedTeamName])
