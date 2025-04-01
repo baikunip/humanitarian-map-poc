@@ -116,7 +116,84 @@ $(document).ready(function() {
         controls: {
             polygon: true,
             trash: true
-        }
+        },
+        styles: [
+            // ACTIVE (being drawn)
+            // line stroke
+            {
+                "id": "gl-draw-line",
+                "type": "line",
+                "filter": ["all", ["==", "$type", "LineString"]],
+                "layout": {
+                  "line-cap": "round",
+                  "line-join": "round"
+                },
+                "paint": {
+                  "line-color": "#D20C0C",
+                  "line-dasharray": [0.2, 2],
+                  "line-width": 2
+                }
+            },
+            // polygon fill
+            {
+              "id": "gl-draw-polygon-fill",
+              "type": "fill",
+              "filter": ["all", ["==", "$type", "Polygon"]],
+              "paint": {
+                "fill-color": "#19647e",
+                "fill-outline-color": "#D20C0C",
+                "fill-opacity": 0.9
+              }
+            },
+            // polygon mid points
+            {
+              'id': 'gl-draw-polygon-midpoint',
+              'type': 'circle',
+              'filter': ['all',
+                ['==', '$type', 'Point'],
+                ['==', 'meta', 'midpoint']],
+              'paint': {
+                'circle-radius': 3,
+                'circle-color': '#fbb03b'
+              }
+            },
+            // polygon outline stroke
+            // This doesn't style the first edge of the polygon, which uses the line stroke styling instead
+            {
+              "id": "gl-draw-polygon-stroke-active",
+              "type": "line",
+              "filter": ["all", ["==", "$type", "Polygon"]],
+              "layout": {
+                "line-cap": "round",
+                "line-join": "round"
+              },
+              "paint": {
+                "line-color": "#D20C0C",
+                "line-dasharray": [0.2, 2],
+                "line-width": 2
+              }
+            },
+            // vertex point halos
+            {
+              "id": "gl-draw-polygon-and-line-vertex-halo-active",
+              "type": "circle",
+              "filter": ["all", ["==", "meta", "vertex"], ["==", "$type", "Point"]],
+              "paint": {
+                "circle-radius": 5,
+                "circle-color": "#FFF"
+              }
+            },
+            // vertex points
+            {
+              "id": "gl-draw-polygon-and-line-vertex-active",
+              "type": "circle",
+              "filter": ["all", ["==", "meta", "vertex"], ["==", "$type", "Point"]],
+              "paint": {
+                "circle-radius": 3,
+                "circle-color": "#D20C0C",
+              }
+            }
+          ]
     });
     map.addControl(draw, 'top-right');
 
@@ -221,8 +298,8 @@ $(document).ready(function() {
                 type: 'fill',
                 source: 'merged-source',
                 paint: {
-                    'fill-color': '#32CD32',
-                    'fill-opacity': .8
+                    'fill-color': '#19647E',
+                    'fill-opacity': 1
                 }
             });
             
@@ -452,8 +529,8 @@ $('#pdf-button').click(function() {
                 type: 'fill',
                 source: 'merged-source',
                 paint: {
-                    'fill-color': '#32CD32',
-                    'fill-opacity': 0.6
+                    'fill-color': '#19647E',
+                    'fill-opacity': 1
                 }
             });
             
